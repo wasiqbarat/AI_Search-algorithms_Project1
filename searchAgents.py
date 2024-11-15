@@ -295,39 +295,42 @@ class CornersProblem(search.SearchProblem):
         Returns the start state (in your state space, not the full Pacman state
         space)
         """
-        "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        return self.startingPosition, tuple([]) 
 
+    
     def isGoalState(self, state: Any):
         """
         Returns whether this search state is a goal state of the problem.
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        position = state[0]
+        visited_corners = state[1]
+        if position in self.corners and position not in visited_corners:
+            visited_corners.append(position)
+        return len(visited_corners) == 4
+    
 
     def getSuccessors(self, state: Any):
         """
         Returns successor states, the actions they require, and a cost of 1.
-
-         As noted in search.py:
-            For a given state, this should return a list of triples, (successor,
-            action, stepCost), where 'successor' is a successor to the current
-            state, 'action' is the action required to get there, and 'stepCost'
-            is the incremental cost of expanding to that successor
         """
-
         successors = []
         for action in [Directions.NORTH, Directions.SOUTH, Directions.EAST, Directions.WEST]:
-            # Add a successor state to the successor list if the action is legal
-            # Here's a code snippet for figuring out whether a new position hits a wall:
-            #   x,y = currentPosition
-            #   dx, dy = Actions.directionToVector(action)
-            #   nextx, nexty = int(x + dx), int(y + dy)
-            #   hitsWall = self.walls[nextx][nexty]
+            x, y = state[0]
+            visited_corners = state[1]
+            dx, dy = Actions.directionToVector(action)
+            nextx, nexty = int(x + dx), int(y + dy)
+            successor_position = (nextx, nexty)
+            hits_wall = self.walls[nextx][nexty]
+        
+            if not hits_wall:
+                successor_visited_corners = list(visited_corners)
+                if successor_position in self.corners and successor_position not in visited_corners:
+                    successor_visited_corners.append(successor_position)
+            
+                successors.append(((successor_position, tuple(successor_visited_corners)), action, 1))
 
-            "*** YOUR CODE HERE ***"
-
-        self._expanded += 1 # DO NOT CHANGE
+        self._expanded += 1  # DO NOT CHANGE
         return successors
 
     def getCostOfActions(self, actions):
@@ -345,25 +348,59 @@ class CornersProblem(search.SearchProblem):
 
 
 
-def cornersHeuristic(state: Any, problem: CornersProblem):
+# def cornersHeuristic(state, problem):
+#     """
+#     A heuristic for the CornersProblem that you defined.
+
+#       state:   The current search state
+#                (a data structure you chose in your search problem)
+
+#       problem: The CornersProblem instance for this layout.
+
+#     This function should always return a number that is a lower bound on the
+#     shortest path from the state to a goal of the problem; i.e.  it should be
+#     admissible (as well as consistent).
+#     """
+#     corners = problem.corners  # These are the corner coordinates
+#     walls = problem.walls  # These are the walls of the maze, as a Grid (game.py)
+
+#     "*** YOUR CODE HERE ***"
+#     position = state[0]
+#     visited_corners = state[1]
+#     unvisited_corners = [corner for corner in corners if corner not in visited_corners]
+#     result = 0
+#     for unvisited_corner in unvisited_corners:
+#         result = max(result, mazeDistance(position, unvisited_corner, problem.startingGameState))
+#     return result
+
+def cornersHeuristic(state, problem):
     """
-    A heuristic for the CornersProblem that you defined.
-
-      state:   The current search state
-               (a data structure you chose in your search problem)
-
-      problem: The CornersProblem instance for this layout.
-
-    This function should always return a number that is a lower bound on the
-    shortest path from the state to a goal of the problem; i.e.  it should be
-    admissible.
+    A heuristic for the CornersProblem that estimates the cost to reach all remaining corners.
     """
-    corners = problem.corners # These are the corner coordinates
-    walls = problem.walls # These are the walls of the maze, as a Grid (game.py)
+    corners = problem.corners  # These are the corner coordinates
+    walls = problem.walls  # These are the walls of the maze
+    current_position, visited_corners = state
 
-    "*** YOUR CODE HERE ***"
-    return 0 # Default to trivial solution
+    # Get a list of unvisited corners
+    remaining_corners = [corner for corner in corners if corner not in visited_corners]
 
+    # If all corners are visited, heuristic is zero
+    if not remaining_corners:
+        return 0
+
+    # Heuristic: Sum of distances to visit all remaining corners
+    total_cost = 0
+    current = current_position
+
+    # Greedily compute the path visiting the closest remaining corner first
+    while remaining_corners:
+        distances = [(util.manhattanDistance(current, corner), corner) for corner in remaining_corners]
+        closest_distance, closest_corner = min(distances)
+        total_cost += closest_distance
+        current = closest_corner
+        remaining_corners.remove(closest_corner)
+
+    return total_cost
 
 
 class AStarCornersAgent(SearchAgent):
@@ -453,7 +490,10 @@ def foodHeuristic(state: Tuple[Tuple, List[List]], problem: FoodSearchProblem):
     """
     position, foodGrid = state
     "*** YOUR CODE HERE ***"
-    return 0
+    result = 0
+    for cell in foodGrid.asList():
+        result = max(result, mazeDistance(position, cell, problem.startingGameState))
+    return result
 
 
 class ClosestDotSearchAgent(SearchAgent):
@@ -461,8 +501,8 @@ class ClosestDotSearchAgent(SearchAgent):
     def registerInitialState(self, state):
         self.actions = []
         currentState = state
-        while(currentState.getFood().count() > 0):
-            nextPathSegment = self.findPathToClosestDot(currentState) # The missing piece
+        while (currentState.getFood().count() > 0):
+            nextPathSegment = self.findPathToClosestDot(currentState)  # The missing piece
             self.actions += nextPathSegment
             for action in nextPathSegment:
                 legal = currentState.getLegalActions()
@@ -473,7 +513,7 @@ class ClosestDotSearchAgent(SearchAgent):
         self.actionIndex = 0
         print('Path found with cost %d.' % len(self.actions))
 
-    def findPathToClosestDot(self, gameState: pacman.GameState):
+    def findPathToClosestDot(self, gameState):
         """
         Returns a path (a list of actions) to the closest dot, starting from
         gameState.
@@ -485,7 +525,9 @@ class ClosestDotSearchAgent(SearchAgent):
         problem = AnyFoodSearchProblem(gameState)
 
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        return search.breadthFirstSearch(problem)
+        # util.raiseNotDefined()
+
 
 class AnyFoodSearchProblem(PositionSearchProblem):
     """
@@ -511,17 +553,18 @@ class AnyFoodSearchProblem(PositionSearchProblem):
         self.walls = gameState.getWalls()
         self.startState = gameState.getPacmanPosition()
         self.costFn = lambda x: 1
-        self._visited, self._visitedlist, self._expanded = {}, [], 0 # DO NOT CHANGE
+        self._visited, self._visitedlist, self._expanded = {}, [], 0  # DO NOT CHANGE
 
-    def isGoalState(self, state: Tuple[int, int]):
+    def isGoalState(self, state):
         """
         The state is Pacman's position. Fill this in with a goal test that will
         complete the problem definition.
         """
-        x,y = state
+        x, y = state
 
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        return state in self.food.asList()
+        # util.raiseNotDefined()
 
 def mazeDistance(point1: Tuple[int, int], point2: Tuple[int, int], gameState: pacman.GameState) -> int:
     """
